@@ -331,6 +331,12 @@ if udise_list:
     df = df[df[udise_col].astype(str).isin(udise_list)]
 else:
     st.warning(tr["no_udise"])
+# --- Maintain user-given UDISE order ---
+try:
+    df[udise_col] = df[udise_col].astype(str)
+    df = df.set_index(udise_col).loc[udise_list].reset_index()
+except Exception as e:
+    st.warning(f"Some UDISE codes not found or ordering issue: {e}")
 
 # Create helper to actually build preset fields on demand
 def build_class_totals(target_df):
@@ -567,6 +573,19 @@ if st.button(tr["generate"]):
 
             st.download_button(tr["download"], data=excel_bytes, file_name=filename_base + ".xlsx",
                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            # -------------------------------------------
+            # Provide COPY OUTPUT option
+            # -------------------------------------------
+            st.markdown("### 📋 Copy Output")
+
+            # Convert output DF to TSV (Excel/Google Sheets friendly)
+            copy_text = out_df.to_csv(sep="\t", index=False)
+
+            st.text_area(
+            "Copy the entire output (Ctrl + A → Ctrl + C):",
+             copy_text,
+             height=250
+             )
             st.download_button("⬇ Download CSV", data=csv_bytes, file_name=filename_base + ".csv", mime="text/csv")
             st.info("Excel has formatted headers (blue bold) and borders.")
 
