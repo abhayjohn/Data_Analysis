@@ -136,7 +136,7 @@ TRANSLATIONS = {
 # -------------------------
 # Start UI
 # -------------------------
-st.title("🏫 UDISE Data Generator — Complete (Fixed)")
+st.title("🏫 UDISE Data Generator")
 
 lang_choice = st.radio("Language / மொழி", ("English", "தமிழ்"), horizontal=True)
 lang = "en" if lang_choice == "English" else "ta"
