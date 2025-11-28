@@ -157,27 +157,111 @@ if "created_fields" not in st.session_state:
 if "selected_columns" not in st.session_state:
     st.session_state["selected_columns"] = []  # persistent selection state
 
-# File uploader
-uploaded_file = st.file_uploader(tr["upload"], type=["xlsx", "xls", "csv"])
-if uploaded_file is None:
-    st.info(tr["no_file"])
-    st.stop()
+# -------------------------
+# Load Master File (URL → Local → Upload)
+# -------------------------
 
-# Read file robustly (specify engines)
+import requests
+from io import BytesIO
+
+st.subheader("Master Data Source")
+
+MASTER_URL = "https://d3ijhv7dn0xr3b.cloudfront.net/10684.csv"
+
+df_master = None
+source_used = None
+
+# -------------------------------------------
+# 1️⃣ Try loading from online master URL first
+# -------------------------------------------
 try:
-    fname = uploaded_file.name.lower()
-    if fname.endswith(".csv"):
-        df_master = pd.read_csv(uploaded_file, dtype=str)
-    elif fname.endswith(".xls"):
-        df_master = pd.read_excel(uploaded_file, engine="xlrd", dtype=str)
+    st.write("Fetching default master file from online source...")
+    response = requests.get(MASTER_URL, timeout=10)
+
+    if response.status_code == 200:
+        data = BytesIO(response.content)
+
+        if MASTER_URL.lower().endswith(".csv"):
+            df_master = pd.read_csv(data, dtype=str)
+        elif MASTER_URL.lower().endswith(".xls"):
+            df_master = pd.read_excel(data, engine="xlrd", dtype=str)
+        else:
+            df_master = pd.read_excel(data, engine="openpyxl", dtype=str)
+
+        source_used = f"Online URL: {MASTER_URL}"
+        st.success(f"✔ Loaded master file from URL")
+
     else:
-        df_master = pd.read_excel(uploaded_file, engine="openpyxl", dtype=str)
+        st.warning(f"⚠ URL returned status code: {response.status_code}")
+
 except Exception as e:
-    st.error(f"Error reading file: {e}")
+    st.warning(f"⚠ Could not load from online URL: {e}")
+
+
+# -------------------------------------------
+# 2️⃣ Try local default master files (fallback)
+# -------------------------------------------
+if df_master is None:
+    default_files = ["master.xlsx", "master.xls", "master.csv"]
+
+    for f in default_files:
+        if os.path.exists(f):
+            try:
+                if f.endswith(".csv"):
+                    df_master = pd.read_csv(f, dtype=str)
+                elif f.endswith(".xls"):
+                    df_master = pd.read_excel(f, engine="xlrd", dtype=str)
+                else:
+                    df_master = pd.read_excel(f, engine="openpyxl", dtype=str)
+
+                source_used = f"Local file: {f}"
+                st.success(f"✔ Loaded default master file: {f}")
+                break
+
+            except Exception as e:
+                st.warning(f"⚠ Found {f} but could not load it: {e}")
+
+
+# -------------------------------------------
+# 3️⃣ Upload option always overrides previous
+# -------------------------------------------
+st.subheader("Optional: Upload master file to override default")
+
+uploaded_file = st.file_uploader(
+    "Upload Excel/CSV",
+    type=["xlsx", "xls", "csv"]
+)
+
+if uploaded_file is not None:
+    try:
+        fname = uploaded_file.name.lower()
+        if fname.endswith(".csv"):
+            df_master = pd.read_csv(uploaded_file, dtype=str)
+        elif fname.endswith(".xls"):
+            df_master = pd.read_excel(uploaded_file, engine="xlrd", dtype=str)
+        else:
+            df_master = pd.read_excel(uploaded_file, engine="openpyxl", dtype=str)
+
+        source_used = f"Uploaded file: {uploaded_file.name}"
+        st.success(f"✔ Using uploaded master file: {uploaded_file.name}")
+
+    except Exception as e:
+        st.error(f"❌ Error reading uploaded file: {e}")
+        st.stop()
+
+
+# -------------------------------------------
+# Final fail-safe
+# -------------------------------------------
+if df_master is None:
+    st.error("❌ No master data available. Please upload a file.")
     st.stop()
 
-# Normalize column names (strip)
+# Normalize columns
 df_master.columns = df_master.columns.str.strip()
+
+st.info(f"📌 Using master data from: **{source_used}**")
+
 
 # --- COERCE class gender columns to numeric early ---
 # This is the fix: convert ClassN_Boys/Girls/Transgen -> numeric with fillna(0)
