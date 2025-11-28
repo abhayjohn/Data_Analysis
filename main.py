@@ -260,7 +260,7 @@ if df_master is None:
 # Normalize columns
 df_master.columns = df_master.columns.str.strip()
 
-st.info(f"📌 Using master data from: **{source_used}**")
+# st.info(f"📌 Using master data from: **{source_used}**")
 
 
 # --- COERCE class gender columns to numeric early ---
