@@ -194,11 +194,11 @@ filter_cols_candidates = {
     "District": ["District", "district", "DISTRICT", "DISTRICT_NAME"],
     "Block": ["Block", "block", "BLOCK", "BlockName"],
     "Education District": ["Education District", "EducationDistrict", "EDU_DIST", "EDUCATION_DISTRICT"],
-    "School Type": ["School Type", "SchoolType", "Type", "SCHOOL_TYPE"],
+    "School Type": ["School Type", "SchoolType", "Type", "SCHOOL_TYPE","School_Type"],
     "Management": ["Management", "management", "MANAGEMENT"],
-    "Management Type": ["Management Type", "ManagementType"],
+    "Management Type": ["Management Type", "ManagementType",""],
     "Category": ["Category", "category", "CATEGORY"],
-    "Category Type": ["Category Type", "CategoryType"]
+    "Category Type": ["Category Type", "CategoryType","Category_Type"]
 }
 
 def find_col(candidates):
