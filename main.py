@@ -9,7 +9,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 from openpyxl.utils.dataframe import dataframe_to_rows
 
-st.set_page_config(page_title="UDISE Data Generator", layout="wide")
+st.set_page_config(page_title="UDISE Data Generator Test", layout="wide")
 
 # -------------------------
 # Helpers
