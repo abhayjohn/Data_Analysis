@@ -697,6 +697,15 @@ with tab1:
 
 with tab2:
 
+    with tab2:
+
+    # --- Global State Initialization (for Column Selection) ---
+# These variables help manage Streamlit's state for column selection
+    df_master_loaded_temp = None
+    all_columns = []
+    selected_columns_state = []
+
+    # --- UI Setup ---
     st.header("📂 District-wise Output Generator")
 
     # Upload master file
@@ -705,6 +714,44 @@ with tab2:
         type=["xlsx"],
         key="master_upload_tab2"
     )
+
+    # --- Conditional Column Selection UI ---
+    if uploaded_master is not None:
+        try:
+            # Read file headers to extract column names
+            df_temp = pd.read_excel(uploaded_master, dtype=str, nrows=0) 
+            all_columns = df_temp.columns.str.strip().tolist()
+            
+            # Check for mandatory 'District' column
+            if "District" not in all_columns:
+                st.error("The uploaded file must contain a column named 'District'.")
+                st.stop()
+
+            # Load the full file only once for column selection purposes 
+            # (This is safe as it's outside the main button logic)
+            uploaded_master.seek(0)
+            df_master_loaded_temp = pd.read_excel(uploaded_master, dtype=str)
+            df_master_loaded_temp.columns = df_master_loaded_temp.columns.str.strip()
+
+            # Column selection component
+            selected_columns_state = st.multiselect(
+                "Select Columns to Export",
+                options=all_columns,
+                default=all_columns, # Default to selecting all columns
+                key="column_selector"
+            )
+
+            # Ensure 'District' remains selected if data generation is attempted
+            if "District" not in selected_columns_state:
+                st.warning("The 'District' column is mandatory for grouping and output generation. It must be selected.")
+                # This ensures we have the mandatory column, even if the user deselects it
+                if 'District' in all_columns:
+                    selected_columns_state.append('District')
+                
+        except Exception as e:
+            st.error(f"Error processing uploaded file: {e}")
+            st.stop()
+
 
     # Optional UDISE filtering
     udise_input = st.text_area(
@@ -722,57 +769,51 @@ with tab2:
         ],
         key="output_mode_tab2"
     )
-
+        
     if st.button("Generate Output", key="generate_btn_tab2"):
 
-        import pandas as pd
-        from io import BytesIO
-        from zipfile import ZipFile
-        from openpyxl import Workbook
-        from openpyxl.utils.dataframe import dataframe_to_rows
-        # Removed: from rapidfuzz import process, fuzz 
-
-        if uploaded_master is None:
-            st.error("Upload a master Excel file to continue.")
+        if uploaded_master is None or not selected_columns_state:
+            st.error("Please upload a master file and select the columns you wish to export.")
             st.stop()
 
         # --- DEFINE VALID DISTRICTS (Normalized to Uppercase for Case-Insensitive Match) ---
-        # UPDATED: This list now includes all districts from the latest provided list (image) 
-        # and handles the specific entry 'CHENNAI (EXT. GCC)' which will now be matched as is.
         VALID_DISTRICTS_UPPER = [
-        "ARIYALUR", "CHENGALPATU", "CHENGALPATTU", "CHENNAI (EXT. GCC)", "THOOTHUKKUDI", "VILLUPURAM", "COIMBATORE",
-        "CUDDALORE", "DHARMAPURI", "DINDIGUL", "ERODE", "KALLAKURICHI",
-        "KANCHEEPURAM", "KANNIYAKUMARI", "KARUR", "KRISHNAGIRI", "MADURAI",
-        "MAYILADUTHURAI", "NAGAPATTINAM", "NAMAKKAL", "PERAMBALUR", "PUDUKKOTTAI",
-        "RAMANATHAPURAM", "RANIPET", "SALEM", "SIVAGANGAI", "TENKASI",
-        "THANJAVUR", "THE NILGIRIS", "THENI", "TIRUCHIRAPPALLI",
-        "TIRUNELVELI", "TIRUPATHUR", "TIRUPPUR", "TIRUVALLUR", "TIRUVANNAMALAI",
-        "TIRUVARUR", "VELLORE", "VIRUDHUNAGAR"
+            "ARIYALUR", "CHENGALPATU", "CHENGALPATTU", "CHENNAI", "CHENNAI (EXT. GCC)", "COIMBATORE",
+            "CUDDALORE", "DHARMAPURI", "DINDIGUL", "ERODE", "KALLAKURICHI",
+            "KANCHEEPURAM", "KANNIYAKUMARI", "KARUR", "KRISHNAGIRI", "MADURAI",
+            "MAYILADUTHURAI", "NAGAPATTINAM", "NAMAKKAL", "PERAMBALUR", "PUDUKKOTTAI",
+            "RAMANATHAPURAM", "RANIPET", "SALEM", "SIVAGANGAI", "TENKASI",
+            "THANJAVUR", "THE NILGIRIS", "THENI", "THOOTHUKKUDI", "TIRUCHIRAPPALLI",
+            "TIRUNELVELI", "TIRUPATHUR", "TIRUPPUR", "TIRUVALLUR", "TIRUVANNAMALAI",
+            "TIRUVARUR", "VELLORE", "VILLUPURAM", "VIRUDHUNAGAR"
         ]
         # ---------------------------------------------------------------------------------
-
-        # Load master sheet
-        df_master = pd.read_excel(uploaded_master, dtype=str)
-        df_master.columns = df_master.columns.str.strip()
-
-        # Check for 'District' column early
-        if "District" not in df_master.columns:
-            st.error("Column 'District' not found in the master file!")
+        
+        # Use the pre-loaded DataFrame copy for processing
+        df_master = df_master_loaded_temp.copy()
+        
+        # --- FILTER DATAFRAMES BY SELECTED COLUMNS (NEW) ---
+        df_master = df_master[selected_columns_state]
+        df = df_master.copy() 
+        
+        # Check if 'District' is present after selection (should be covered by the UI guard, but double check)
+        if "District" not in df.columns:
+            st.error("Internal error: 'District' column not found in data frame. Please ensure it is selected.")
             st.stop()
-            
+
+
         # Standardize data: Fill NaNs and ensure string type for matching
         df_master['District'] = df_master['District'].fillna('').astype(str).str.strip()
+        df['District'] = df['District'].fillna('').astype(str).str.strip()
 
         # Apply UDISE filtering first
         if udise_input.strip():
             udise_list = [u.strip() for u in udise_input.split("\n") if u.strip()]
-            df = df_master[df_master["UDISE"].isin(udise_list)].copy()
+            df = df[df["UDISE"].isin(udise_list)].copy()
 
             # maintain input order
             df["order"] = pd.Categorical(df["UDISE"], categories=udise_list, ordered=True)
             df = df.sort_values("order").drop(columns=["order"])
-        else:
-            df = df_master.copy()
             
         if df.empty:
             st.warning("No matching UDISE codes found.")
@@ -783,9 +824,6 @@ with tab2:
         # Create a temporary uppercase column for filtering
         df['District_Upper'] = df['District'].str.upper().str.strip()
         
-        # Removed the logic to strip characters after '(', ensuring CHENNAI (EXT. GCC) 
-        # must be matched exactly as it appears in the VALID_DISTRICTS_UPPER list.
-
         # Filter the DataFrame to include only rows where the District matches an item 
         # in the VALID_DISTRICTS_UPPER list (case-insensitively)
         df_filtered = df[df['District_Upper'].isin(VALID_DISTRICTS_UPPER)].copy()
@@ -809,14 +847,18 @@ with tab2:
             
         # -----------------------------------------------
 
-        # --- NEW: Convert suitable columns to numeric format before output ---
-        # Identify columns that should remain as text/IDs
+        # --- Data Type Cleanup (Re-Enabling controlled numeric conversion for output) ---
+        # Now that columns are filtered, we re-enable numeric conversion for ALL non-ID columns
+        # This correctly sets the type for OpenPyXL, while preserving all selected text data.
         ID_COLUMNS = ['UDISE', 'District'] 
         
         for col in df.columns:
             if col not in ID_COLUMNS:
-                # Attempt to convert column to numeric, turning non-numeric strings into NaN
-                df[col] = pd.to_numeric(df[col], errors='coerce')
+                # Attempt to convert column to numeric. If it fails (because it's text), 
+                # it coerces to a numeric type that Pandas can handle (like object/string),
+                # but the conversion only happens if the column is fully numeric.
+                # We use `errors='ignore'` instead of 'coerce' to keep text columns as they are.
+                df[col] = pd.to_numeric(df[col], errors='ignore')
         # --------------------------------------------------------------------
 
         # ------------------------
@@ -829,19 +871,19 @@ with tab2:
             wb.remove(wb.active) # Remove the default empty sheet
 
             # ---- MASTER SHEET (full upload) ----
-            # Create a sheet with the original master data
+            # Create a sheet with the original master data (now filtered by selected columns)
             ws_master = wb.create_sheet(title="MASTER_Original")
             for r in dataframe_to_rows(df_master, index=False, header=True):
                 ws_master.append(r)
 
-            # ---- DISTRICT SHEETS (based on df, which is now filtered and numeric-converted) ----
-            # Grouping by the original 'District' column, which now only contains valid names
+            # ---- DISTRICT SHEETS (based on df) ----
+            # Grouping by the original 'District' column
             for district, group in df.groupby("District"):
                 # Clean sheet name for excel constraints (max 31 chars, no invalid chars)
                 sheet_name = str(district)[:31].replace("/", "_").replace("*", "_") 
                 ws = wb.create_sheet(title=sheet_name)
 
-                # openpyxl automatically detects the dtype from the pandas group now
+                # openpyxl uses the updated numeric data types from the Pandas group
                 for r in dataframe_to_rows(group, index=False, header=True):
                     ws.append(r)
 
