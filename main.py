@@ -696,9 +696,6 @@ with tab1:
     st.caption("Built with ❤️ — if some class columns differ from ClassN_Boys/Girls/Transgen, give exact names and I'll adapt.")
 
 with tab2:
-
-    with tab2:
-
     # --- Global State Initialization (for Column Selection) ---
 # These variables help manage Streamlit's state for column selection
     df_master_loaded_temp = None
