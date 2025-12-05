@@ -322,21 +322,24 @@ if not udise_col:
 
 # UDISE input
 udise_input = st.text_area(tr["udise_input"], height=80)
+
+# Build UDISE list only if user typed something
 udise_list = []
-if udise_input:
-    udise_list = [u.strip() for u in udise_input.replace("\r", "\n").replace(",", "\n").split("\n") if u.strip()]
+if udise_input.strip():
+    udise_list = [
+        u.strip()
+        for u in udise_input.replace("\r", "\n").replace(",", "\n").split("\n")
+        if u.strip()
+    ]
 
 # Apply UDISE filter
-if udise_list:
+if len(udise_list) > 0:
     df = df[df[udise_col].astype(str).isin(udise_list)]
+    st.success(f"Filtered to {len(df)} schools based on UDISE")
 else:
-    st.warning(tr["no_udise"])
-# --- Maintain user-given UDISE order ---
-try:
-    df[udise_col] = df[udise_col].astype(str)
-    df = df.set_index(udise_col).loc[udise_list].reset_index()
-except Exception as e:
-    st.warning(f"Some UDISE codes not found or ordering issue: {e}")
+    # NEW BEHAVIOUR: use full master file
+    st.info("No UDISE entered — using full master dataset.")
+    # No filtering needed → df remains full dataset
 
 # -------------------------------------------
 # ADVANCED PIVOT TABLE (PER-COLUMN AGGREGATION)
