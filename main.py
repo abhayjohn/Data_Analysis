@@ -338,6 +338,104 @@ try:
 except Exception as e:
     st.warning(f"Some UDISE codes not found or ordering issue: {e}")
 
+# -------------------------------------------
+# ADVANCED PIVOT TABLE (PER-COLUMN AGGREGATION)
+# -------------------------------------------
+
+st.markdown("---")
+st.subheader("📊 Pivot Table with Per-Column Aggregation (Excel Style)")
+
+# Numeric columns
+numeric_cols = [
+    c for c in df.columns 
+    if pd.to_numeric(df[c], errors="coerce").notnull().any()
+]
+
+# Categorical columns
+categorical_cols = [
+    c for c in df.columns 
+    if c not in numeric_cols
+]
+
+group_cols = st.multiselect(
+    "Select columns to GROUP BY:",
+    options=categorical_cols
+)
+
+value_cols = st.multiselect(
+    "Select value columns (to aggregate):",
+    options=numeric_cols
+)
+
+# Dictionary to store user-selected aggregation per column
+col_aggs = {}
+
+if value_cols:
+    st.write("### Select aggregation for each column:")
+    for col in value_cols:
+        col_aggs[col] = st.selectbox(
+            f"{col} → Aggregation",
+            ["sum", "mean", "count", "min", "max", "count_unique"],
+            key=f"agg_{col}"
+        )
+
+do_group = st.button("Generate Pivot Table")
+
+if do_group:
+    if not group_cols:
+        st.error("Please select at least one GROUP BY column.")
+    elif not value_cols:
+        st.error("Please select at least one VALUE column.")
+    else:
+        try:
+            # Prepare dict for pandas aggregation
+            agg_dict = {}
+
+            for col in value_cols:
+                func = col_aggs[col]
+
+                if func == "count_unique":
+                    agg_dict[col] = pd.Series.nunique
+                else:
+                    agg_dict[col] = func
+
+                # Ensure numeric conversion
+                df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+            # Apply groupby
+            pivot_df = df.groupby(group_cols).agg(agg_dict).reset_index()
+
+            st.success("Pivot generated successfully!")
+            st.dataframe(pivot_df.head(50))
+
+            # Download buttons
+            excel_bytes = to_excel_bytes_styled(pivot_df)
+            csv_bytes = pivot_df.to_csv(index=False).encode("utf-8")
+
+            st.download_button(
+                "⬇ Download Pivot (Excel)",
+                excel_bytes,
+                file_name="Pivot_Output.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+
+            st.download_button(
+                "⬇ Download Pivot (CSV)",
+                csv_bytes,
+                file_name="Pivot_Output.csv",
+                mime="text/csv",
+            )
+
+            copy_text = pivot_df.to_csv(sep="\t", index=False)
+            st.text_area(
+                "📋 Copy Pivot Output:",
+                copy_text,
+                height=250
+            )
+
+        except Exception as e:
+            st.error(f"Error generating pivot: {e}")
+
 # Create helper to actually build preset fields on demand
 def build_class_totals(target_df):
     """Create Class1_Total ... Class12_Total in the given dataframe object (in place)."""
